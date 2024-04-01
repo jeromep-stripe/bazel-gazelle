@@ -73,38 +73,38 @@ type CrossResolver interface {
 // RuleIndex is a table of rules in a workspace, indexed by label and by
 // import path. Used by Resolver to map import paths to labels.
 type RuleIndex struct {
-	rules          []*ruleRecord
+	Rules          []*ruleRecord
 	labelMap       map[label.Label]*ruleRecord
-	importMap      map[ImportSpec][]*ruleRecord
+	ImportMap      map[ImportSpec][]*ruleRecord
 	mrslv          func(r *rule.Rule, pkgRel string) Resolver
-	crossResolvers []CrossResolver
+	CrossResolvers []CrossResolver
 }
 
-// ruleRecord contains information about a rule relevant to import indexing.
+// ruleRecord contains information about a Rule relevant to import indexing.
 type ruleRecord struct {
-	rule  *rule.Rule
+	Rule  *rule.Rule
 	label label.Label
 	file  *rule.File
 
-	// importedAs is a list of ImportSpecs by which this rule may be imported.
+	// importedAs is a list of ImportSpecs by which this Rule may be imported.
 	// Used to build a map from ImportSpecs to ruleRecords.
 	importedAs []ImportSpec
 
-	// embeds is the transitive closure of labels for rules that this rule embeds
+	// embeds is the transitive closure of labels for rules that this Rule embeds
 	// (as determined by the Embeds method). This only includes rules in the same
 	// language (i.e., it includes a go_library embedding a go_proto_library, but
 	// not a go_proto_library embedding a proto_library).
 	embeds []label.Label
 
-	// embedded indicates whether another rule of the same language embeds this
-	// rule. Embedded rules should not be indexed.
+	// embedded indicates whether another Rule of the same language embeds this
+	// Rule. Embedded rules should not be indexed.
 	embedded bool
 
 	didCollectEmbeds bool
 
 	// lang records the language that this import is relevant for.
 	// Due to the presence of mapped kinds, it's otherwise
-	// impossible to know the underlying builtin rule type for an
+	// impossible to know the underlying builtin Rule type for an
 	// arbitrary import.
 	lang string
 }
@@ -123,7 +123,7 @@ func NewRuleIndex(mrslv func(r *rule.Rule, pkgRel string) Resolver, exts ...inte
 	return &RuleIndex{
 		labelMap:       make(map[label.Label]*ruleRecord),
 		mrslv:          mrslv,
-		crossResolvers: crossResolvers,
+		CrossResolvers: crossResolvers,
 	}
 }
 
@@ -148,7 +148,7 @@ func (ix *RuleIndex) AddRule(c *config.Config, r *rule.Rule, f *rule.File) {
 	}
 
 	record := &ruleRecord{
-		rule:       r,
+		Rule:       r,
 		label:      label.New(c.RepoName, f.Pkg, r.Name()),
 		file:       f,
 		importedAs: imps,
@@ -158,7 +158,7 @@ func (ix *RuleIndex) AddRule(c *config.Config, r *rule.Rule, f *rule.File) {
 		log.Printf("multiple rules found with label %s", record.label)
 		return
 	}
-	ix.rules = append(ix.rules, record)
+	ix.Rules = append(ix.Rules, record)
 	ix.labelMap[record.label] = record
 }
 
@@ -169,7 +169,7 @@ func (ix *RuleIndex) AddRule(c *config.Config, r *rule.Rule, f *rule.File) {
 // Finish must be called after all AddRule calls and before any
 // FindRulesByImport calls.
 func (ix *RuleIndex) Finish() {
-	for _, r := range ix.rules {
+	for _, r := range ix.Rules {
 		ix.collectEmbeds(r)
 	}
 	ix.buildImportIndex()
@@ -179,9 +179,9 @@ func (ix *RuleIndex) collectEmbeds(r *ruleRecord) {
 	if r.didCollectEmbeds {
 		return
 	}
-	resolver := ix.mrslv(r.rule, r.file.Pkg)
+	resolver := ix.mrslv(r.Rule, r.file.Pkg)
 	r.didCollectEmbeds = true
-	embedLabels := resolver.Embeds(r.rule, r.label)
+	embedLabels := resolver.Embeds(r.Rule, r.label)
 	r.embeds = embedLabels
 	for _, e := range embedLabels {
 		er, ok := ix.findRuleByLabel(e, r.label)
@@ -189,7 +189,7 @@ func (ix *RuleIndex) collectEmbeds(r *ruleRecord) {
 			continue
 		}
 		ix.collectEmbeds(er)
-		erResolver := ix.mrslv(er.rule, er.file.Pkg)
+		erResolver := ix.mrslv(er.Rule, er.file.Pkg)
 		if resolver.Name() == erResolver.Name() {
 			er.embedded = true
 			r.embeds = append(r.embeds, er.embeds...)
@@ -200,8 +200,8 @@ func (ix *RuleIndex) collectEmbeds(r *ruleRecord) {
 
 // buildImportIndex constructs the map used by FindRulesByImport.
 func (ix *RuleIndex) buildImportIndex() {
-	ix.importMap = make(map[ImportSpec][]*ruleRecord)
-	for _, r := range ix.rules {
+	ix.ImportMap = make(map[ImportSpec][]*ruleRecord)
+	for _, r := range ix.Rules {
 		if r.embedded {
 			continue
 		}
@@ -211,7 +211,7 @@ func (ix *RuleIndex) buildImportIndex() {
 				continue
 			}
 			indexed[imp] = true
-			ix.importMap[imp] = append(ix.importMap[imp], r)
+			ix.ImportMap[imp] = append(ix.ImportMap[imp], r)
 		}
 	}
 }
@@ -246,7 +246,7 @@ type FindResult struct {
 //
 // DEPRECATED: use FindRulesByImportWithConfig instead
 func (ix *RuleIndex) FindRulesByImport(imp ImportSpec, lang string) []FindResult {
-	matches := ix.importMap[imp]
+	matches := ix.ImportMap[imp]
 	results := make([]FindResult, 0, len(matches))
 	for _, m := range matches {
 		if m.lang != lang {
@@ -268,7 +268,7 @@ func (ix *RuleIndex) FindRulesByImportWithConfig(c *config.Config, imp ImportSpe
 	if len(results) > 0 {
 		return results
 	}
-	for _, cr := range ix.crossResolvers {
+	for _, cr := range ix.CrossResolvers {
 		results = append(results, cr.CrossResolve(c, ix, imp, lang)...)
 	}
 	return results

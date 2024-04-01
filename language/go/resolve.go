@@ -307,6 +307,11 @@ func resolveVendored(gc *goConfig, imp string) (label.Label, error) {
 }
 
 func resolveProto(c *config.Config, ix *resolve.RuleIndex, rc *repo.RemoteCache, imp string, from label.Label) (label.Label, error) {
+	for p, x := range ix.ImportMap {
+		if p.Lang == "go" {
+			log.Printf("%+v --- %+v\n", p, x[0])
+		}
+	}
 	if wellKnownProtos[imp] {
 		return label.NoLabel, errSkipImport
 	}
